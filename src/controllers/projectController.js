@@ -4,7 +4,7 @@ const Task    = require("../models/Task");
 
 exports.getProjects = async (req, res, next) => {
   try {
-    const projects = await Project.find({ isDeleted: false }).sort({ name: 1 });
+    const projects = await Project.find({ isDeleted: { $ne: true } }).sort({ name: 1 });
     res.json({ success: true, projects });
   } catch (err) { next(err); }
 };

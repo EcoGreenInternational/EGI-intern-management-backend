@@ -7,8 +7,8 @@ const POPULATE = { path: "participants createdBy", select: "name role avatar ava
 const getMeetings = async (req, res) => {
   try {
     const query = req.user.role === "intern"
-      ? { participants: req.user._id, isDeleted: false }
-      : { isDeleted: false };
+      ? { participants: req.user._id, isDeleted: { $ne: true } }
+      : { isDeleted: { $ne: true } };
 
     const meetings = await Meeting.find(query)
       .sort({ date: 1 })

@@ -14,15 +14,15 @@ const safeDestroy = async (publicId, resourceType = "image") => {
 exports.getAllUsers = async (req, res, next) => {
   try {
     const { role } = req.query;
-    let filter = role ? { role, isDeleted: false } : { isDeleted: false };
+    let filter = role ? { role, isDeleted: { $ne: true } } : { isDeleted: { $ne: true } };
 
     if (req.user.supervisorLevel === "junior") {
       if (!role || role === "intern") {
-        filter = { role: "intern", isDeleted: false };
+        filter = { role: "intern", isDeleted: { $ne: true } };
       } else if (role === "supervisor") {
-        filter = { _id: req.user._id, isDeleted: false };
+        filter = { _id: req.user._id, isDeleted: { $ne: true } };
       } else {
-        filter = { $or: [{ role: "intern" }, { _id: req.user._id }], isDeleted: false };
+        filter = { $or: [{ role: "intern" }, { _id: req.user._id }], isDeleted: { $ne: true } };
       }
     }
 

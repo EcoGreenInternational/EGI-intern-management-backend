@@ -23,7 +23,7 @@ const enrichTasks = async (tasks) => {
 exports.getTasks = async (req, res, next) => {
   try {
     const { status, project, search, internId, date, weekKey, page, limit, all } = req.query;
-    let filter = { isDeleted: false };
+    let filter = { isDeleted: { $ne: true } };
 
     if (req.user.role === "intern") {
       filter.assignedTo = req.user._id;
@@ -108,7 +108,7 @@ exports.getWeeklyHours = async (req, res, next) => {
     const wk = weekKey || currentWeekKey();
     const { start, end } = weekKeyToDateRange(wk);
 
-    const filter = { date: { $gte: start, $lte: end }, isDeleted: false };
+    const filter = { date: { $gte: start, $lte: end }, isDeleted: { $ne: true } };
     if (req.user.role === "intern") {
       filter.assignedTo = req.user._id;
     } else if (internId && internId !== "All") {
