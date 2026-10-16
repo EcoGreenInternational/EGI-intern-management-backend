@@ -7,8 +7,8 @@ const POPULATE = { path: "participants createdBy", select: "name role avatar ava
 const getMeetings = async (req, res) => {
   try {
     const query = req.user.role === "intern"
-      ? { participants: req.user._id }
-      : {};
+      ? { participants: req.user._id, isDeleted: false }
+      : { isDeleted: false };
 
     const meetings = await Meeting.find(query)
       .sort({ date: 1 })
@@ -77,7 +77,9 @@ const deleteMeeting = async (req, res) => {
     const meeting = await Meeting.findById(req.params.id);
     if (!meeting) return res.status(404).json({ message: "Meeting not found" });
 
-    await meeting.deleteOne();
+    meeting.isDeleted = true;
+    meeting.deletedAt = new Date();
+    await meeting.save();
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ message: e.message });

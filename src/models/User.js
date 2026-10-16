@@ -69,6 +69,10 @@ const userSchema = new mongoose.Schema(
 
     mustChangePassword: { type: Boolean, default: false },
 
+    // ── Soft delete ────────────────────────────────────────────────────────
+    isDeleted:   { type: Boolean, default: false },
+    deletedAt:   { type: Date,   default: null },
+
     // ── Basic details ──────────────────────────────────────────────────────
     gender:                { type: String, enum: ["Male", "Female", "Other", ""], default: "" },
     dateOfBirth:           { type: String, default: "" },

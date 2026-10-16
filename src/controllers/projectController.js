@@ -4,7 +4,7 @@ const Task    = require("../models/Task");
 
 exports.getProjects = async (req, res, next) => {
   try {
-    const projects = await Project.find().sort({ name: 1 });
+    const projects = await Project.find({ isDeleted: false }).sort({ name: 1 });
     res.json({ success: true, projects });
   } catch (err) { next(err); }
 };
@@ -39,7 +39,12 @@ exports.createProject = async (req, res, next) => {
 
 exports.deleteProject = async (req, res, next) => {
   try {
-    await Project.findOneAndDelete({ name: req.params.name });
+    const project = await Project.findOne({ name: req.params.name });
+    if (!project) return res.status(404).json({ success: false, message: "Project not found." });
+
+    project.isDeleted = true;
+    project.deletedAt = new Date();
+    await project.save();
     res.json({ success: true, message: "Project deleted." });
   } catch (err) { next(err); }
 };

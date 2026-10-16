@@ -23,7 +23,7 @@ const enrichTasks = async (tasks) => {
 exports.getTasks = async (req, res, next) => {
   try {
     const { status, project, search, internId, date, weekKey, page, limit, all } = req.query;
-    let filter = {};
+    let filter = { isDeleted: false };
 
     if (req.user.role === "intern") {
       filter.assignedTo = req.user._id;
@@ -108,7 +108,7 @@ exports.getWeeklyHours = async (req, res, next) => {
     const wk = weekKey || currentWeekKey();
     const { start, end } = weekKeyToDateRange(wk);
 
-    const filter = { date: { $gte: start, $lte: end } };
+    const filter = { date: { $gte: start, $lte: end }, isDeleted: false };
     if (req.user.role === "intern") {
       filter.assignedTo = req.user._id;
     } else if (internId && internId !== "All") {
@@ -240,11 +240,18 @@ exports.updateTask = async (req, res, next) => {
         return res.status(403).json({ success: false, message: "Access denied." });
     }
 
+    // All fields are updatable including leave fields (isLeave, leaveReason)
     const fields = ["date","project","assignedBy","assignedTo","task","status",
                     "estimateTime","timeFrom","timeTo","totalMinutes","workDoc","reason",
                     "isLeave","leaveReason"];
     fields.forEach(f => { if (req.body[f] !== undefined) task[f] = req.body[f]; });
     if (req.body.totalMinutes !== undefined) task.totalMinutes = parseInt(req.body.totalMinutes) || 0;
+
+    // If task is a leave day, keep status as Done and totalMinutes as 0
+    if (task.isLeave) {
+      task.status       = "Done";
+      task.totalMinutes = 0;
+    }
 
     await task.save();
     await task.populate("assignedTo", "name avatar avatarColor");
@@ -309,7 +316,9 @@ exports.deleteTask = async (req, res, next) => {
         && String(task.assignedTo._id) !== String(req.user._id))
       return res.status(403).json({ success: false, message: "Access denied." });
 
-    await task.deleteOne();
+    task.isDeleted = true;
+    task.deletedAt = new Date();
+    await task.save();
     res.json({ success: true, message: "Task deleted." });
   } catch (err) { next(err); }
 };

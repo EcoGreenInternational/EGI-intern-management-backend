@@ -7,6 +7,10 @@ const projectSchema = new mongoose.Schema(
     fullName: { type: String, required: true },
     color:    { type: String, default: "#1a6640" },
     icon:     { type: String, default: "" },
+
+    // ── Soft delete ─────────────────────────────────────────────────────
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date,   default: null },
   },
   { timestamps: true }
 );

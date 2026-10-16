@@ -14,15 +14,15 @@ const safeDestroy = async (publicId, resourceType = "image") => {
 exports.getAllUsers = async (req, res, next) => {
   try {
     const { role } = req.query;
-    let filter = role ? { role } : {};
+    let filter = role ? { role, isDeleted: false } : { isDeleted: false };
 
     if (req.user.supervisorLevel === "junior") {
       if (!role || role === "intern") {
-        filter = { role: "intern" };
+        filter = { role: "intern", isDeleted: false };
       } else if (role === "supervisor") {
-        filter = { _id: req.user._id };
+        filter = { _id: req.user._id, isDeleted: false };
       } else {
-        filter = { $or: [{ role: "intern" }, { _id: req.user._id }] };
+        filter = { $or: [{ role: "intern" }, { _id: req.user._id }], isDeleted: false };
       }
     }
 
@@ -128,7 +128,13 @@ exports.deleteUser = async (req, res, next) => {
     if (req.user.supervisorLevel !== "senior")
       return res.status(403).json({ success: false, message: "Senior supervisors only." });
 
-    await User.findByIdAndDelete(req.params.id);
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: "User not found." });
+
+    user.isDeleted = true;
+    user.deletedAt = new Date();
+    await user.save();
+
     res.json({ success: true, message: "User deleted." });
   } catch (err) { next(err); }
 };

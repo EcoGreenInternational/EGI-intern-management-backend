@@ -38,6 +38,10 @@ const taskSchema = new mongoose.Schema(
     createdBy:  { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     subTasks:   [subTaskSchema],
     weekKey:    { type: String, default: "" },
+
+    // ── Soft delete ───────────────────────────────────────────────────────
+    isDeleted:  { type: Boolean, default: false },
+    deletedAt:  { type: Date,   default: null },
   },
   { timestamps: true }
 );

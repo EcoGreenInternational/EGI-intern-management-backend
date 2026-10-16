@@ -13,6 +13,10 @@ const meetingSchema = new mongoose.Schema({
   createdBy:    { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   status:       { type: String, enum: ["scheduled","completed","cancelled"], default: "scheduled" },
   notes:        { type: String, default: "" },
+
+  // ── Soft delete ──────────────────────────────────────────────────────────
+  isDeleted:    { type: Boolean, default: false },
+  deletedAt:    { type: Date,   default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.model("Meeting", meetingSchema);
