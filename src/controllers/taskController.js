@@ -22,7 +22,7 @@ const enrichTasks = async (tasks) => {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getTasks = async (req, res, next) => {
   try {
-    const { status, project, search, internId, date, weekKey, page, limit, all } = req.query;
+    const { status, project, search, internId, date, startDate, endDate, weekKey, isLeave, page, limit, all } = req.query;
     let filter = { isDeleted: { $ne: true } };
 
     if (req.user.role === "intern") {
@@ -50,11 +50,17 @@ exports.getTasks = async (req, res, next) => {
     if (project && project !== "All") filter.project = project;
     if (search)  filter.task = { $regex: search, $options: "i" };
 
-    if (date && !weekKey) {
-      filter.date = date;
+    if (isLeave !== undefined && isLeave !== "") {
+      filter.isLeave = isLeave === "true" || isLeave === true;
     }
 
-    if (weekKey) {
+    if (startDate || endDate) {
+      filter.date = {};
+      if (startDate) filter.date.$gte = startDate;
+      if (endDate)   filter.date.$lte = endDate;
+    } else if (date && !weekKey) {
+      filter.date = date;
+    } else if (weekKey) {
       const { start, end } = weekKeyToDateRange(weekKey);
       filter.date = { $gte: start, $lte: end };
     }
