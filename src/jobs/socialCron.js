@@ -1,78 +1,81 @@
 // src/jobs/socialCron.js
-const cron        = require("node-cron");
+const cron          = require("node-cron");
 const SocialContent = require("../models/SocialContent");
 const Notification  = require("../models/Notification");
+
+const notify = async (io, content, type, message, socketMessage) => {
+  await Notification.create({
+    recipient:    content.assignedTo,
+    type,
+    message,
+    relatedId:    content._id,
+    relatedModel: "SocialContent",
+  });
+  if (io) io.to(`user:${content.assignedTo}`).emit("notification", { type, message: socketMessage });
+};
 
 module.exports = function startSocialCron(io) {
 
   // ── Every hour: mark missed posts ─────────────────────────────────────────
   cron.schedule("0 * * * *", async () => {
     try {
-      const now     = new Date();
-      const missed  = await SocialContent.find({
+      const missed = await SocialContent.find({
         status:          "Planned",
-        plannedPostDate: { $lt: now },
+        plannedPostDate: { $lt: new Date() },
       });
 
+      let count = 0;
       for (const content of missed) {
-        content.status = "Missed";
-        await content.save();
-
-        await Notification.create({
-          recipient:    content.assignedTo,
-          type:         "missed_post",
-          message:      `Your post "${content.title}" on ${content.platform} was not posted on time.`,
-          relatedId:    content._id,
-          relatedModel: "SocialContent",
-        });
-
-        if (io) {
-          io.to(`user:${content.assignedTo}`).emit("notification", {
-            type:    "missed_post",
-            message: `Missed post: "${content.title}"`,
-          });
+        // One bad record must not stop the rest of the batch.
+        try {
+          content.status = "Missed";
+          await content.save();
+          count++;
+          await notify(
+            io, content, "missed_post",
+            `Your post "${content.title}" on ${content.platform} was not posted on time.`,
+            `Missed post: "${content.title}"`
+          );
+        } catch (err) {
+          console.error(`[SocialCron] Missed-post update failed for ${content._id}:`, err.message);
         }
       }
 
-      if (missed.length > 0) {
-        console.log(`[SocialCron] Marked ${missed.length} post(s) as Missed`);
-      }
+      if (count > 0) console.log(`[SocialCron] Marked ${count} post(s) as Missed`);
     } catch (err) {
       console.error("[SocialCron] Missed post check error:", err.message);
     }
   });
 
-  // ── Daily at 9am: 7-day performance reminders ─────────────────────────────
+  // ── Daily at 9am: 7-day performance reminders (sent once per post) ────────
   cron.schedule("0 9 * * *", async () => {
     try {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
       const due = await SocialContent.find({
-        status:          "Posted",
-        actualPostDate:  { $lte: sevenDaysAgo },
-        performanceCheckedAt: { $exists: false },
+        status:                    "Posted",
+        actualPostDate:            { $lte: sevenDaysAgo },
+        performanceCheckedAt:      { $exists: false },
+        performanceReminderSentAt: { $exists: false },
       });
 
+      let count = 0;
       for (const content of due) {
-        await Notification.create({
-          recipient:    content.assignedTo,
-          type:         "performance_due",
-          message:      `7 days have passed since "${content.title}" was posted. Please add performance data.`,
-          relatedId:    content._id,
-          relatedModel: "SocialContent",
-        });
-
-        if (io) {
-          io.to(`user:${content.assignedTo}`).emit("notification", {
-            type:    "performance_due",
-            message: `Performance data due: "${content.title}"`,
-          });
+        try {
+          await notify(
+            io, content, "performance_due",
+            `7 days have passed since "${content.title}" was posted. Please add performance data.`,
+            `Performance data due: "${content.title}"`
+          );
+          content.performanceReminderSentAt = new Date();
+          await content.save();
+          count++;
+        } catch (err) {
+          console.error(`[SocialCron] Reminder failed for ${content._id}:`, err.message);
         }
       }
 
-      if (due.length > 0) {
-        console.log(`[SocialCron] Sent ${due.length} 7-day reminder(s)`);
-      }
+      if (count > 0) console.log(`[SocialCron] Sent ${count} 7-day reminder(s)`);
     } catch (err) {
       console.error("[SocialCron] 7-day reminder error:", err.message);
     }
