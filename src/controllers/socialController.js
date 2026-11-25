@@ -47,7 +47,7 @@ exports.createContent = async (req, res) => {
     });
 
     const io = req.app.get("io");
-    if (io) io.to(assignedTo.toString()).emit("notification", {
+    if (io) io.to(`user:${assignedTo}`).emit("notification", {
       type: "content_assigned",
       message: `New content assigned: "${socialProject.name}"`,
     });

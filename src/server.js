@@ -100,7 +100,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-require("./socket")(httpServer);
+// Attach Socket.IO once and share the instance with controllers (req.app.get("io"))
+// and the cron jobs so they can push real-time notifications.
+const io = require("./socket")(httpServer);
+app.set("io", io);
 
 const PORT = process.env.PORT || 5000;
 
@@ -108,7 +111,6 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
-      const io = require("./socket").getIO?.() || null;
       startSocialCron(io);
 
     

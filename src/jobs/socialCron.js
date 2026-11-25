@@ -27,7 +27,7 @@ module.exports = function startSocialCron(io) {
         });
 
         if (io) {
-          io.to(content.assignedTo.toString()).emit("notification", {
+          io.to(`user:${content.assignedTo}`).emit("notification", {
             type:    "missed_post",
             message: `Missed post: "${content.title}"`,
           });
@@ -63,7 +63,7 @@ module.exports = function startSocialCron(io) {
         });
 
         if (io) {
-          io.to(content.assignedTo.toString()).emit("notification", {
+          io.to(`user:${content.assignedTo}`).emit("notification", {
             type:    "performance_due",
             message: `Performance data due: "${content.title}"`,
           });
