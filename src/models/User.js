@@ -37,9 +37,12 @@ const childSchema = new mongoose.Schema(
 // ── Document (CV / Police Report / Grama Niladhari) ──────────────────────────
 const documentFileSchema = new mongoose.Schema(
   {
-    url:        { type: String, default: "" }, // Cloudinary HTTPS URL
-    publicId:   { type: String, default: "" }, // Cloudinary public_id for deletion
-    uploadedAt: { type: Date,   default: null },
+    url:          { type: String, default: "" }, // Cloudinary HTTPS URL
+    publicId:     { type: String, default: "" }, // Cloudinary public_id for deletion
+    resourceType: { type: String, default: "" }, // "raw" (PDF/Word) or "image"; needed to delete it
+    fileName:     { type: String, default: "" }, // original file name, for display
+    mimeType:     { type: String, default: "" },
+    uploadedAt:   { type: Date,   default: null },
   },
   { _id: false }
 );
