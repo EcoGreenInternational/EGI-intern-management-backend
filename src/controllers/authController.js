@@ -18,7 +18,11 @@ exports.login = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "username, password and role are required." });
     }
 
-    const user = await User.findOne({ username: username.toLowerCase(), role });
+    const user = await User.findOne({
+      username:  username.trim().toLowerCase(),
+      role,
+      isDeleted: { $ne: true },   // removed accounts can no longer sign in
+    });
     if (!user)
       return res.status(401).json({ success: false, message: "Invalid credentials." });
 

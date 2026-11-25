@@ -32,6 +32,9 @@ app.use(cors({
 app.options('*', cors());
 
 // ── 3. Body Parser with Size Limits ───────────────────────────────────────────
+// Diary entries can hold long text, so they get a larger limit. This must run
+// before the global parser (a body that is already parsed is not parsed again).
+app.use("/api/diary", express.json({ limit: "300kb" }));
 app.use(express.json({ limit: "25kb" }));
 app.use(express.urlencoded({ extended: true, limit: "25kb" }));
 
@@ -69,9 +72,12 @@ app.use("/api/messages",        require("./routes/messages"));
 app.use("/api/meetings",        require("./routes/meetings"));
 app.use("/api/social-projects", require("./routes/socialProjects"));
 app.use("/api/social",          require("./routes/social"));
+app.use("/api/social-routines", require("./routes/socialRoutines"));
+app.use("/api/notifications",   require("./routes/notifications"));
 app.use("/api/files",           require("./routes/files"));
 app.use("/api/third-party-items",     require("./routes/thirdPartyItems"));    
 app.use("/api/renewal-notifications", require("./routes/renewalNotifications")); 
+app.use("/api/diary",                 require("./routes/diary"));
 
 // ── 6. Centralized Safe Error Handling ─────────────────────────────────────────
 app.use((err, req, res, next) => {
@@ -100,7 +106,11 @@ app.use((err, req, res, next) => {
   });
 });
 
-require("./socket")(httpServer);
+// Attach Socket.IO once and share the instance with controllers (req.app.get("io"))
+// and the cron jobs so they can push real-time notifications.
+const io = require("./socket")(httpServer);
+app.set("io", io);
+require("./services/notify").setNotifyIO(io);
 
 const PORT = process.env.PORT || 5000;
 
@@ -108,8 +118,7 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
-      const io = require("./socket").getIO?.() || null;
-      startSocialCron(io);
+      startSocialCron();
 
     
       const renewalJob = startRenewalReminderJob(io);

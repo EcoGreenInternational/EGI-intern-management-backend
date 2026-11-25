@@ -22,6 +22,8 @@ const socialProjectSchema = new mongoose.Schema(
     platformUrls:    [platformUrlSchema],  // per-platform URLs for this social project
     createdBy:       { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     isActive:        { type: Boolean, default: true },
+    // Posts must be approved by a supervisor before they can be posted.
+    requireApproval: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

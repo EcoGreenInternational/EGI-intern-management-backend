@@ -61,6 +61,7 @@ async function checkRenewals(io, force = false) {
     const seniorUsers = await User.find({
       role: { $regex: /^supervisor$/i },
       supervisorLevel: { $regex: /^senior$/i },
+      isDeleted: { $ne: true },   // removed seniors no longer get reminders
     });
 
     if (!seniorUsers.length) {

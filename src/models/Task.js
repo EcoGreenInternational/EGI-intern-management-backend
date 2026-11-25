@@ -33,6 +33,9 @@ const taskSchema = new mongoose.Schema(
 
     isLeave:     { type: Boolean, default: false },
     leaveReason: { type: String,  default: "" },
+    // Last day of a multi-day leave ("YYYY-MM-DD"); "" means a single day.
+    // A leave range is stored as ONE task covering date … leaveEndDate.
+    leaveEndDate: { type: String, default: "" },
 
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     createdBy:  { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -50,6 +53,7 @@ taskSchema.pre("save", function (next) {
   if (this.date) {
     this.weekKey = getWeekKey(new Date(this.date));
   }
+  if (!this.isLeave) this.leaveEndDate = "";
   next();
 });
 

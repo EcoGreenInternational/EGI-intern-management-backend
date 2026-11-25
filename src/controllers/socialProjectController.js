@@ -3,7 +3,7 @@ const SocialProject = require("../models/SocialProject");
 const User          = require("../models/User");
 
 // Allow anyone who is NOT an intern (handles all supervisor role variations)
-const isSupervisor = (user) => user.role !== "intern";
+const isSupervisor = (user) => user.role === "supervisor";
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 exports.createSocialProject = async (req, res) => {
@@ -11,7 +11,7 @@ exports.createSocialProject = async (req, res) => {
     if (!isSupervisor(req.user))
       return res.status(403).json({ success: false, message: "Supervisor access required" });
 
-    const { name, description, assignedPersons = [], platformUrls = [] } = req.body;
+    const { name, description, assignedPersons = [], platformUrls = [], requireApproval = true } = req.body;
 
     if (!name?.trim())
       return res.status(400).json({ success: false, message: "Project name is required" });
@@ -21,6 +21,7 @@ exports.createSocialProject = async (req, res) => {
       description,
       assignedPersons,
       platformUrls,
+      requireApproval: requireApproval !== false,
       createdBy: req.user._id,
     });
 
@@ -73,7 +74,7 @@ exports.updateSocialProject = async (req, res) => {
     if (!isSupervisor(req.user))
       return res.status(403).json({ success: false, message: "Supervisor access required" });
 
-    const { name, description, assignedPersons, platformUrls, isActive } = req.body;
+    const { name, description, assignedPersons, platformUrls, isActive, requireApproval } = req.body;
 
     const project = await SocialProject.findById(req.params.id);
     if (!project)
@@ -84,6 +85,7 @@ exports.updateSocialProject = async (req, res) => {
     if (assignedPersons !== undefined) project.assignedPersons = assignedPersons;
     if (platformUrls    !== undefined) project.platformUrls    = platformUrls;
     if (isActive        !== undefined) project.isActive        = isActive;
+    if (requireApproval !== undefined) project.requireApproval = requireApproval !== false;
 
     await project.save();
     await project.populate("assignedPersons", "name email role");
@@ -101,6 +103,8 @@ exports.deleteSocialProject = async (req, res) => {
       return res.status(403).json({ success: false, message: "Supervisor access required" });
 
     await SocialProject.findByIdAndDelete(req.params.id);
+    // Stop routines for the deleted project so they don't keep creating posts.
+    await require("../models/SocialRoutine").updateMany({ socialProject: req.params.id }, { active: false });
     res.json({ success: true, message: "Social project deleted" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -110,7 +114,7 @@ exports.deleteSocialProject = async (req, res) => {
 // ─── Get all assignable members ───────────────────────────────────────────────
 exports.getMembers = async (req, res) => {
   try {
-    const users = await User.find({ role: { $in: ["intern", "supervisor"] } })
+    const users = await User.find({ role: { $in: ["intern", "supervisor"] }, isDeleted: { $ne: true } })
       .select("name role avatar avatarColor position")
       .sort({ role: 1, name: 1 });
     res.json({ success: true, data: users });

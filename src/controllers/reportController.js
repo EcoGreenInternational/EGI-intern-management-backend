@@ -5,6 +5,10 @@ const Project = require("../models/Project");
 
 
 const { getWeekKey: currentWeekKey } = require("../utils/weekKey");
+const { leaveDayCount } = require("../utils/leave");
+
+// Soft-deleted users, tasks and projects must not appear in reports or totals.
+const NOT_DELETED = { isDeleted: { $ne: true } };
 
 exports.getInternReport = async (req, res, next) => {
   try {
@@ -14,14 +18,14 @@ exports.getInternReport = async (req, res, next) => {
     const limitNum = Math.max(1, parseInt(limit) || 12);
     const skip     = (pageNum - 1) * limitNum;
 
-    let internsQuery = User.find({ role: "intern" }).select("-password").sort({ name: 1 });
+    let internsQuery = User.find({ role: "intern", ...NOT_DELETED }).select("-password").sort({ name: 1 });
     let interns;
     let total;
 
     if (isPaginated) {
       [interns, total] = await Promise.all([
         internsQuery.skip(skip).limit(limitNum),
-        User.countDocuments({ role: "intern" }),
+        User.countDocuments({ role: "intern", ...NOT_DELETED }),
       ]);
     } else {
       interns = await internsQuery;
@@ -31,7 +35,7 @@ exports.getInternReport = async (req, res, next) => {
     const wk = currentWeekKey();
 
     const report = await Promise.all(interns.map(async (intern) => {
-      const allTasks = await Task.find({ assignedTo: intern._id });
+      const allTasks = await Task.find({ assignedTo: intern._id, ...NOT_DELETED });
 
       const leaveTasks    = allTasks.filter(t => t.isLeave === true);
       const realTasks     = allTasks.filter(t => t.isLeave !== true);
@@ -42,7 +46,7 @@ exports.getInternReport = async (req, res, next) => {
       const inProgress = realTasks.filter(t => t.status === "In Progress").length;
       const hold       = realTasks.filter(t => t.status === "Hold").length;
       const todo       = realTasks.filter(t => t.status === "To Do").length;
-      const leaveDays  = leaveTasks.length;
+      const leaveDays  = leaveTasks.reduce((s, t) => s + leaveDayCount(t), 0);
 
       const totalMins = realTasks.reduce((s, t) => {
         const p = t.totalMinutes || 0;
@@ -78,10 +82,10 @@ exports.getInternReport = async (req, res, next) => {
 
 exports.getProjectReport = async (req, res, next) => {
   try {
-    const projects = await Project.find().sort({ name: 1 });
+    const projects = await Project.find(NOT_DELETED).sort({ name: 1 });
 
     const report = await Promise.all(projects.map(async (p) => {
-      const tasks      = await Task.find({ project: p.name, isLeave: { $ne: true } });
+      const tasks      = await Task.find({ project: p.name, isLeave: { $ne: true }, ...NOT_DELETED });
       const done       = tasks.filter(t => t.status === "Done").length;
       const inProgress = tasks.filter(t => t.status === "In Progress").length;
       const hold       = tasks.filter(t => t.status === "Hold").length;
@@ -109,8 +113,8 @@ exports.getProjectReport = async (req, res, next) => {
 
 exports.getSummary = async (req, res, next) => {
   try {
-    const internCount = await User.countDocuments({ role: "intern" });
-    const realTasks   = await Task.find({ isLeave: { $ne: true } });
+    const internCount = await User.countDocuments({ role: "intern", ...NOT_DELETED });
+    const realTasks   = await Task.find({ isLeave: { $ne: true }, ...NOT_DELETED });
     const total       = realTasks.length;
     const done        = realTasks.filter(t => t.status === "Done").length;
     const totalMins   = realTasks.reduce((s, t) => s + (t.totalMinutes || 0), 0);
@@ -120,11 +124,11 @@ exports.getSummary = async (req, res, next) => {
 
 exports.getSupervisorReport = async (req, res, next) => {
   try {
-    const supervisors = await User.find({ role: "supervisor" }).select("-password").sort({ name: 1 });
+    const supervisors = await User.find({ role: "supervisor", ...NOT_DELETED }).select("-password").sort({ name: 1 });
     const wk = currentWeekKey();
 
     const report = await Promise.all(supervisors.map(async (sv) => {
-      const allTasks = await Task.find({ assignedTo: sv._id });
+      const allTasks = await Task.find({ assignedTo: sv._id, ...NOT_DELETED });
 
       const leaveTasks    = allTasks.filter(t => t.isLeave === true);
       const realTasks     = allTasks.filter(t => t.isLeave !== true);
@@ -135,7 +139,7 @@ exports.getSupervisorReport = async (req, res, next) => {
       const inProgress = realTasks.filter(t => t.status === "In Progress").length;
       const hold       = realTasks.filter(t => t.status === "Hold").length;
       const todo       = realTasks.filter(t => t.status === "To Do").length;
-      const leaveDays  = leaveTasks.length;
+      const leaveDays  = leaveTasks.reduce((s, t) => s + leaveDayCount(t), 0);
 
       const totalMins = realTasks.reduce((s, t) => {
         const p   = t.totalMinutes || 0;

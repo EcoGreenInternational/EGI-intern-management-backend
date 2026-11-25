@@ -1,13 +1,36 @@
 // controllers/userController.js
 const User      = require("../models/User");
 const Task      = require("../models/Task");
+const { leaveDayCount } = require("../utils/leave");
 const cloudinary = require("../config/cloudinary");
+const mongoose   = require("mongoose");
+const { resourceTypeFromUrl } = require("../utils/cloudinaryAsset");
+
+const DOC_TYPES = ["cv", "policeReport", "gramaNiladhari"];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const safeDestroy = async (publicId, resourceType = "image") => {
   if (!publicId) return;
   try { await cloudinary.uploader.destroy(publicId, { resource_type: resourceType }); }
   catch (_) { /* ignore – asset may already be gone */ }
+};
+
+// ── Runs BEFORE profile-picture / document uploads ───────────────────────────
+// Validates the target so files are never sent to Cloudinary for a request that
+// will be refused anyway (bad docType, someone else's profile, unknown user).
+exports.checkFileTarget = async (req, res, next) => {
+  try {
+    const { id, docType } = req.params;
+    if (docType !== undefined && !DOC_TYPES.includes(docType))
+      return res.status(400).json({ success: false, message: `Invalid docType. Must be one of: ${DOC_TYPES.join(", ")}` });
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ success: false, message: "Invalid user id." });
+    if (String(req.user._id) !== id && req.user.role !== "supervisor")
+      return res.status(403).json({ success: false, message: "Access denied." });
+    const exists = await User.exists({ _id: id, isDeleted: { $ne: true } });
+    if (!exists) return res.status(404).json({ success: false, message: "User not found." });
+    next();
+  } catch (err) { next(err); }
 };
 
 // ── GET /api/users ────────────────────────────────────────────────────────────
@@ -142,10 +165,10 @@ exports.deleteUser = async (req, res, next) => {
 // ── GET /api/users/:id/stats ──────────────────────────────────────────────────
 exports.getUserStats = async (req, res, next) => {
   try {
-    const allTasks   = await Task.find({ assignedTo: req.params.id });
+    const allTasks   = await Task.find({ assignedTo: req.params.id, isDeleted: { $ne: true } });
 
     const realTasks  = allTasks.filter(t => t.isLeave !== true);
-    const leaveDays  = allTasks.filter(t => t.isLeave === true).length;
+    const leaveDays  = allTasks.filter(t => t.isLeave === true).reduce((s, t) => s + leaveDayCount(t), 0);
 
     const total      = realTasks.length;
     const done       = realTasks.filter(t => t.status === "Done").length;
@@ -218,49 +241,49 @@ exports.deleteProfilePicture = async (req, res, next) => {
 // ── POST /api/users/:id/documents/:docType ────────────────────────────────────
 // docType: "cv" | "policeReport" | "gramaNiladhari"
 exports.uploadUserDocument = async (req, res, next) => {
+  const { id, docType } = req.params;
+  // checkFileTarget already validated docType, access and the user.
+  if (!req.file)
+    return res.status(400).json({ success: false, message: "No file uploaded. Please choose a file." });
+
+  const uploaded = {
+    url:          req.file.path,      // Cloudinary secure URL
+    publicId:     req.file.filename,  // Cloudinary public_id
+    resourceType: resourceTypeFromUrl(req.file.path),
+    fileName:     req.file.originalname || "",
+    mimeType:     req.file.mimetype || "",
+    uploadedAt:   new Date(),
+  };
+
   try {
-    const { id, docType } = req.params;
-    const VALID_TYPES = ["cv", "policeReport", "gramaNiladhari"];
-
-    if (!VALID_TYPES.includes(docType))
-      return res.status(400).json({ success: false, message: `Invalid docType. Must be one of: ${VALID_TYPES.join(", ")}` });
-
-    // Owner or supervisor can upload
-    if (String(req.user._id) !== id && req.user.role !== "supervisor")
-      return res.status(403).json({ success: false, message: "Access denied." });
-
-    if (!req.file)
-      return res.status(400).json({ success: false, message: "No file uploaded." });
-
     const user = await User.findById(id);
     if (!user) {
-      await safeDestroy(req.file.filename, "raw");
+      await safeDestroy(uploaded.publicId, uploaded.resourceType);
       return res.status(404).json({ success: false, message: "User not found." });
     }
 
-    // Remove old Cloudinary asset
     const oldDoc = user.documents?.[docType];
-    if (oldDoc?.publicId) await safeDestroy(oldDoc.publicId, "raw");
-
     user.documents = user.documents || {};
-    user.documents[docType] = {
-      url:        req.file.path,     // Cloudinary secure URL
-      publicId:   req.file.filename, // Cloudinary public_id
-      uploadedAt: new Date(),
-    };
-
+    user.documents[docType] = uploaded;
     await user.save();
+
+    // Remove the replaced file only after the new one is saved.
+    if (oldDoc?.publicId && oldDoc.publicId !== uploaded.publicId)
+      await safeDestroy(oldDoc.publicId, oldDoc.resourceType || resourceTypeFromUrl(oldDoc.url));
+
     res.json({ success: true, user: user.toSafeObject() });
-  } catch (err) { next(err); }
+  } catch (err) {
+    await safeDestroy(uploaded.publicId, uploaded.resourceType);
+    next(err);
+  }
 };
 
 // ── DELETE /api/users/:id/documents/:docType ──────────────────────────────────
 exports.deleteUserDocument = async (req, res, next) => {
   try {
     const { id, docType } = req.params;
-    const VALID_TYPES = ["cv", "policeReport", "gramaNiladhari"];
 
-    if (!VALID_TYPES.includes(docType))
+    if (!DOC_TYPES.includes(docType))
       return res.status(400).json({ success: false, message: "Invalid docType." });
 
     if (String(req.user._id) !== id && req.user.role !== "supervisor")
@@ -270,9 +293,10 @@ exports.deleteUserDocument = async (req, res, next) => {
     if (!user) return res.status(404).json({ success: false, message: "User not found." });
 
     const doc = user.documents?.[docType];
-    if (doc?.publicId) await safeDestroy(doc.publicId, "raw");
+    if (doc?.publicId) await safeDestroy(doc.publicId, doc.resourceType || resourceTypeFromUrl(doc.url));
 
-    user.documents[docType] = { url: "", publicId: "", uploadedAt: null };
+    user.documents = user.documents || {};
+    user.documents[docType] = { url: "", publicId: "", resourceType: "", fileName: "", mimeType: "", uploadedAt: null };
     await user.save();
 
     res.json({ success: true, user: user.toSafeObject() });
