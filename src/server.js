@@ -32,6 +32,9 @@ app.use(cors({
 app.options('*', cors());
 
 // ── 3. Body Parser with Size Limits ───────────────────────────────────────────
+// Diary entries can hold long text, so they get a larger limit. This must run
+// before the global parser (a body that is already parsed is not parsed again).
+app.use("/api/diary", express.json({ limit: "300kb" }));
 app.use(express.json({ limit: "25kb" }));
 app.use(express.urlencoded({ extended: true, limit: "25kb" }));
 
@@ -72,6 +75,7 @@ app.use("/api/social",          require("./routes/social"));
 app.use("/api/files",           require("./routes/files"));
 app.use("/api/third-party-items",     require("./routes/thirdPartyItems"));    
 app.use("/api/renewal-notifications", require("./routes/renewalNotifications")); 
+app.use("/api/diary",                 require("./routes/diary"));
 
 // ── 6. Centralized Safe Error Handling ─────────────────────────────────────────
 app.use((err, req, res, next) => {
