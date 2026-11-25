@@ -6,6 +6,10 @@ const { getWeekKey: currentWeekKey, weekKeyToDateRange } = require("../utils/wee
 
 
 
+// Treat user search text literally: escape regex metacharacters and cap the
+// length, so input like "(" or "C++" can't crash the query or cause ReDoS.
+const escapeRegex = (str) => String(str).slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const enrichTasks = async (tasks) => {
   const allUsernames = [...new Set(tasks.flatMap(t => t.adminChecked || []))];
   const supervisors  = allUsernames.length
@@ -48,7 +52,8 @@ exports.getTasks = async (req, res, next) => {
 
     if (status  && status  !== "All") filter.status  = status;
     if (project && project !== "All") filter.project = project;
-    if (search)  filter.task = { $regex: search, $options: "i" };
+    if (typeof search === "string" && search.trim())
+      filter.task = { $regex: escapeRegex(search.trim()), $options: "i" };
 
     if (isLeave !== undefined && isLeave !== "") {
       filter.isLeave = isLeave === "true" || isLeave === true;
