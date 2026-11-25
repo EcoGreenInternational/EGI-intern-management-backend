@@ -24,8 +24,8 @@ module.exports = function attachSocket(httpServer) {
       const decoded  = jwt.verify(token, process.env.JWT_SECRET);
       socket.userId  = String(decoded.id || decoded._id);
 
-      const user = await User.findById(socket.userId).select("role supervisorLevel");
-      if (!user) return next(new Error("User no longer exists"));
+      const user = await User.findById(socket.userId).select("role supervisorLevel isDeleted");
+      if (!user || user.isDeleted) return next(new Error("User no longer exists"));
       socket.role            = user.role;
       socket.supervisorLevel = user.supervisorLevel;
       next();
