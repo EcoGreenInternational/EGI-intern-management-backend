@@ -110,7 +110,7 @@ exports.deleteSocialProject = async (req, res) => {
 // ─── Get all assignable members ───────────────────────────────────────────────
 exports.getMembers = async (req, res) => {
   try {
-    const users = await User.find({ role: { $in: ["intern", "supervisor"] } })
+    const users = await User.find({ role: { $in: ["intern", "supervisor"] }, isDeleted: { $ne: true } })
       .select("name role avatar avatarColor position")
       .sort({ role: 1, name: 1 });
     res.json({ success: true, data: users });

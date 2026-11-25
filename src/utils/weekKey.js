@@ -31,7 +31,10 @@ const weekKeyToDateRange = (wk) => {
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
 
-  const fmt = (d) => d.toISOString().split("T")[0];
+  // Format with local date parts: toISOString() converts to UTC, which shifts the
+  // week back one day on servers running ahead of UTC (e.g. Asia/Colombo).
+  const fmt = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   return { start: fmt(start), end: fmt(end) };
 };
 

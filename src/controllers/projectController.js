@@ -12,7 +12,7 @@ exports.getProjects = async (req, res, next) => {
 exports.getProjectStats = async (req, res, next) => {
   try {
     const { name } = req.params;
-    const tasks    = await Task.find({ project: name });
+    const tasks    = await Task.find({ project: name, isLeave: { $ne: true }, isDeleted: { $ne: true } });
     const done     = tasks.filter(t => t.status === "Done").length;
 
     const stats = {

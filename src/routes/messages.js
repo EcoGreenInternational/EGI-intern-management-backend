@@ -7,7 +7,7 @@ const { protect } = require("../middleware/auth");
 // ── GET all users ─────────────────────────────────────────────────────────────
 router.get("/users", protect, async (req, res) => {
   try {
-    const users = await User.find({ _id: { $ne: req.user._id } })
+    const users = await User.find({ _id: { $ne: req.user._id }, isDeleted: { $ne: true } })
       .select("name role avatar avatarColor position");
     res.json(users);
   } catch (e) {
