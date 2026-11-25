@@ -5,6 +5,7 @@ const Project = require("../models/Project");
 
 
 const { getWeekKey: currentWeekKey } = require("../utils/weekKey");
+const { leaveDayCount } = require("../utils/leave");
 
 // Soft-deleted users, tasks and projects must not appear in reports or totals.
 const NOT_DELETED = { isDeleted: { $ne: true } };
@@ -45,7 +46,7 @@ exports.getInternReport = async (req, res, next) => {
       const inProgress = realTasks.filter(t => t.status === "In Progress").length;
       const hold       = realTasks.filter(t => t.status === "Hold").length;
       const todo       = realTasks.filter(t => t.status === "To Do").length;
-      const leaveDays  = leaveTasks.length;
+      const leaveDays  = leaveTasks.reduce((s, t) => s + leaveDayCount(t), 0);
 
       const totalMins = realTasks.reduce((s, t) => {
         const p = t.totalMinutes || 0;
@@ -138,7 +139,7 @@ exports.getSupervisorReport = async (req, res, next) => {
       const inProgress = realTasks.filter(t => t.status === "In Progress").length;
       const hold       = realTasks.filter(t => t.status === "Hold").length;
       const todo       = realTasks.filter(t => t.status === "To Do").length;
-      const leaveDays  = leaveTasks.length;
+      const leaveDays  = leaveTasks.reduce((s, t) => s + leaveDayCount(t), 0);
 
       const totalMins = realTasks.reduce((s, t) => {
         const p   = t.totalMinutes || 0;

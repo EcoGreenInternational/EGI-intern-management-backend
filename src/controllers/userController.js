@@ -1,6 +1,7 @@
 // controllers/userController.js
 const User      = require("../models/User");
 const Task      = require("../models/Task");
+const { leaveDayCount } = require("../utils/leave");
 const cloudinary = require("../config/cloudinary");
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -145,7 +146,7 @@ exports.getUserStats = async (req, res, next) => {
     const allTasks   = await Task.find({ assignedTo: req.params.id, isDeleted: { $ne: true } });
 
     const realTasks  = allTasks.filter(t => t.isLeave !== true);
-    const leaveDays  = allTasks.filter(t => t.isLeave === true).length;
+    const leaveDays  = allTasks.filter(t => t.isLeave === true).reduce((s, t) => s + leaveDayCount(t), 0);
 
     const total      = realTasks.length;
     const done       = realTasks.filter(t => t.status === "Done").length;

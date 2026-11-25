@@ -3,6 +3,7 @@ const User     = require("../models/User");
 const mongoose = require("mongoose");
 
 const { getWeekKey: currentWeekKey, weekKeyToDateRange } = require("../utils/weekKey");
+const { leaveDaysInRange, dateOverlapFilter, normaliseLeaveEnd } = require("../utils/leave");
 
 
 
@@ -59,16 +60,17 @@ exports.getTasks = async (req, res, next) => {
       filter.isLeave = isLeave === "true" || isLeave === true;
     }
 
+    // Date filters also match leave ranges that overlap the requested period.
+    let dateCond = null;
     if (startDate || endDate) {
-      filter.date = {};
-      if (startDate) filter.date.$gte = startDate;
-      if (endDate)   filter.date.$lte = endDate;
+      dateCond = dateOverlapFilter(startDate, endDate);
     } else if (date && !weekKey) {
-      filter.date = date;
+      dateCond = dateOverlapFilter(date, date);
     } else if (weekKey) {
       const { start, end } = weekKeyToDateRange(weekKey);
-      filter.date = { $gte: start, $lte: end };
+      dateCond = dateOverlapFilter(start, end);
     }
+    if (dateCond) filter.$and = [dateCond];
 
     const isPaginated = all !== "true" && (page !== undefined || limit !== undefined);
     const pageNum  = Math.max(1, parseInt(page)  || 1);
@@ -119,7 +121,7 @@ exports.getWeeklyHours = async (req, res, next) => {
     const wk = weekKey || currentWeekKey();
     const { start, end } = weekKeyToDateRange(wk);
 
-    const filter = { date: { $gte: start, $lte: end }, isDeleted: { $ne: true } };
+    const filter = { ...dateOverlapFilter(start, end), isDeleted: { $ne: true } };
     if (req.user.role === "intern") {
       filter.assignedTo = req.user._id;
     } else if (internId && internId !== "All") {
@@ -137,7 +139,7 @@ exports.getWeeklyHours = async (req, res, next) => {
       const key = String(t.assignedTo._id);
       if (!grouped[key]) grouped[key] = { intern: t.assignedTo, totalMins: 0, taskCount: 0, leaveDays: 0, tasks: [] };
       if (t.isLeave) {
-        grouped[key].leaveDays += 1;
+        grouped[key].leaveDays += leaveDaysInRange(t, start, end);
       } else {
         const mins = (t.totalMinutes > 0)
           ? t.totalMinutes
@@ -145,7 +147,7 @@ exports.getWeeklyHours = async (req, res, next) => {
         grouped[key].totalMins  += mins;
         grouped[key].taskCount  += 1;
       }
-      grouped[key].tasks.push({ id: t._id, date: t.date, task: t.task, status: t.status, totalMinutes: t.totalMinutes, isLeave: t.isLeave });
+      grouped[key].tasks.push({ id: t._id, date: t.date, leaveEndDate: t.leaveEndDate, task: t.task, status: t.status, totalMinutes: t.totalMinutes, isLeave: t.isLeave });
     });
 
     const TARGET_MINS = 30 * 60;
@@ -191,6 +193,10 @@ exports.createTask = async (req, res, next) => {
       isLeave, leaveReason,
     } = req.body;
 
+    // A multi-day leave is saved as one task (leaveEndDate). "endDate" is accepted as an alias.
+    const leaveEnd = normaliseLeaveEnd(!!isLeave, date, req.body.leaveEndDate || req.body.endDate);
+    if (leaveEnd.error) return res.status(400).json({ success: false, message: leaveEnd.error });
+
     let targetId;
     if (req.user.role === "intern") {
       targetId = req.user._id;
@@ -226,6 +232,7 @@ exports.createTask = async (req, res, next) => {
       reason:       reason       || "",
       isLeave:      isLeave      || false,
       leaveReason:  leaveReason  || "",
+      leaveEndDate: leaveEnd.leaveEndDate,
       adminChecked: [],
       subTasks:     [],
     });
@@ -257,6 +264,16 @@ exports.updateTask = async (req, res, next) => {
                     "isLeave","leaveReason"];
     fields.forEach(f => { if (req.body[f] !== undefined) task[f] = req.body[f]; });
     if (req.body.totalMinutes !== undefined) task.totalMinutes = parseInt(req.body.totalMinutes) || 0;
+
+    // Leave range: validate the end date against the (possibly updated) start date.
+    if (req.body.leaveEndDate !== undefined || req.body.endDate !== undefined || req.body.isLeave !== undefined || req.body.date !== undefined) {
+      const requested = req.body.leaveEndDate !== undefined ? req.body.leaveEndDate
+                      : req.body.endDate      !== undefined ? req.body.endDate
+                      : task.leaveEndDate;
+      const leaveEnd = normaliseLeaveEnd(!!task.isLeave, task.date, requested);
+      if (leaveEnd.error) return res.status(400).json({ success: false, message: leaveEnd.error });
+      task.leaveEndDate = leaveEnd.leaveEndDate;
+    }
 
     // If task is a leave day, keep status as Done and totalMinutes as 0
     if (task.isLeave) {
