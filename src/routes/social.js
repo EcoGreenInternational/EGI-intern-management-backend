@@ -1,36 +1,32 @@
 // routes/social.js
 const express = require("express");
-const router = express.Router();
-const {
-  createContent,
-  getAllContent,
-  getContent,
-  updateContent,
-  markAsPosted,
-  submitPerformance,
-  deleteContent,
-  getDashboardStats,
-} = require("../controllers/socialController");
-const { protect, adminOnly } = require("../middleware/auth"); // your existing middleware
+const router  = express.Router();
+const c = require("../controllers/socialController");
+const { protect, restrictTo } = require("../middleware/auth");
+const { socialMediaUpload, handleUpload, SOCIAL_MEDIA_MAX_MB } = require("../middleware/uploadCloudinary");
 
-// All routes require authentication
 router.use(protect);
 
-// Dashboard stats
-router.get("/dashboard", getDashboardStats);
+// Fixed paths first (before /:id)
+router.get("/dashboard", c.getDashboardStats);
+router.post("/media",    handleUpload(socialMediaUpload.single("file"), SOCIAL_MEDIA_MAX_MB), c.uploadMedia);
+router.delete("/media",  c.discardMedia);
 
-// Content CRUD
 router.route("/")
-  .get(getAllContent)
-  .post(adminOnly, createContent);
+  .get(c.getAllContent)
+  .post(c.createContent);          // supervisors assign; interns draft their own
 
 router.route("/:id")
-  .get(getContent)
-  .put(updateContent)
-  .delete(adminOnly, deleteContent);
+  .get(c.getContent)
+  .put(c.updateContent)
+  .delete(c.deleteContent);
 
-// Status actions
-router.patch("/:id/mark-posted", markAsPosted);
-router.patch("/:id/performance", submitPerformance);
+// Workflow actions
+router.patch("/:id/submit",      c.submitForApproval);
+router.patch("/:id/approve",     restrictTo("supervisor"), c.approveContent);
+router.patch("/:id/reject",      restrictTo("supervisor"), c.rejectContent);
+router.patch("/:id/mark-posted", c.markAsPosted);
+router.patch("/:id/performance", c.submitPerformance);
+router.post("/:id/comments",     c.addComment);
 
 module.exports = router;

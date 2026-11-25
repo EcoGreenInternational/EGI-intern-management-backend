@@ -93,6 +93,25 @@ const generalUpload = multer({
   limits:  { fileSize: 50 * 1024 * 1024 },
 });
 
+// ── Social post media (images / short videos) ───────────────────────────────
+const SOCIAL_MEDIA_MAX_MB = 50;
+const socialMediaUpload = multer({
+  storage: new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => ({
+      folder:        "egi/social",
+      public_id:     `social-${req.user._id}-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+      resource_type: (file.mimetype || "").startsWith("video/") ? "video" : "image",
+    }),
+  }),
+  fileFilter: (req, file, cb) => {
+    const ok = /^image\/(jpeg|png|webp|gif)$/.test(file.mimetype) || /^video\/(mp4|quicktime|webm)$/.test(file.mimetype);
+    if (ok) return cb(null, true);
+    cb(Object.assign(new Error("Use an image (JPG, PNG, WEBP, GIF) or a video (MP4, MOV, WEBM)."), { statusCode: 400 }), false);
+  },
+  limits: { fileSize: SOCIAL_MEDIA_MAX_MB * 1024 * 1024, files: 1 },
+});
+
 // Run a multer middleware and turn its errors into clear 4xx/5xx JSON responses
 // (they used to fall through to the generic "Internal server error.").
 const handleUpload = (multerMiddleware, maxMB) => (req, res, next) => {
@@ -124,4 +143,4 @@ const handleUpload = (multerMiddleware, maxMB) => (req, res, next) => {
   });
 };
 
-module.exports = { profileUpload, documentUpload, generalUpload, handleUpload, DOCUMENT_MAX_MB };
+module.exports = { profileUpload, documentUpload, generalUpload, socialMediaUpload, handleUpload, DOCUMENT_MAX_MB, SOCIAL_MEDIA_MAX_MB };

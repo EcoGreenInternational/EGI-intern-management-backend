@@ -72,6 +72,8 @@ app.use("/api/messages",        require("./routes/messages"));
 app.use("/api/meetings",        require("./routes/meetings"));
 app.use("/api/social-projects", require("./routes/socialProjects"));
 app.use("/api/social",          require("./routes/social"));
+app.use("/api/social-routines", require("./routes/socialRoutines"));
+app.use("/api/notifications",   require("./routes/notifications"));
 app.use("/api/files",           require("./routes/files"));
 app.use("/api/third-party-items",     require("./routes/thirdPartyItems"));    
 app.use("/api/renewal-notifications", require("./routes/renewalNotifications")); 
@@ -108,6 +110,7 @@ app.use((err, req, res, next) => {
 // and the cron jobs so they can push real-time notifications.
 const io = require("./socket")(httpServer);
 app.set("io", io);
+require("./services/notify").setNotifyIO(io);
 
 const PORT = process.env.PORT || 5000;
 
@@ -115,7 +118,7 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
-      startSocialCron(io);
+      startSocialCron();
 
     
       const renewalJob = startRenewalReminderJob(io);
