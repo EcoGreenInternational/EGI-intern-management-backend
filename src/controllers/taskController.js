@@ -196,7 +196,7 @@ exports.createTask = async (req, res, next) => {
         return res.status(400).json({ success: false, message: "Invalid assignedTo value." });
 
       const targetUser = await User.findById(assignedTo);
-      if (!targetUser) return res.status(404).json({ success: false, message: "Assigned user not found." });
+      if (!targetUser || targetUser.isDeleted) return res.status(404).json({ success: false, message: "Assigned user not found." });
 
       if (req.user.supervisorLevel === "junior") {
         if (targetUser.role === "supervisor" && String(targetUser._id) !== String(req.user._id))
