@@ -47,7 +47,7 @@ exports.createContent = async (req, res) => {
     });
 
     const io = req.app.get("io");
-    if (io) io.to(assignedTo.toString()).emit("notification", {
+    if (io) io.to(`user:${assignedTo}`).emit("notification", {
       type: "content_assigned",
       message: `New content assigned: "${socialProject.name}"`,
     });
@@ -170,7 +170,8 @@ exports.submitPerformance = async (req, res) => {
     if (!isSupervisor(req.user) && content.assignedTo.toString() !== req.user._id.toString())
       return res.status(403).json({ success: false, message: "Access denied" });
 
-    if (content.status !== "Posted" && content.status !== "Pending Review")
+    // "Reviewed" is allowed so metrics can be corrected after the first submission.
+    if (!["Posted", "Reviewed"].includes(content.status))
       return res.status(400).json({ success: false, message: "Can only add metrics to posted content" });
 
     const v  = parseInt(views)    || 0;
@@ -234,7 +235,9 @@ exports.getDashboardStats = async (req, res) => {
 
     const topPerformers = await SocialContent.find({
       ...filter,
-      status: "Posted",
+      // Submitting metrics moves content to "Reviewed", so include it here —
+      // otherwise anything with a score is excluded and the list is always empty.
+      status: { $in: ["Posted", "Reviewed"] },
       "metrics.performanceScore": { $exists: true, $gt: 0 },
       actualPostDate: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
     })

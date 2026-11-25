@@ -8,6 +8,6 @@ router.use(protect);
 router.get("/summary",  restrictTo("supervisor"), getSummary);
 router.get("/interns",  restrictTo("supervisor"), getInternReport);
 router.get("/projects", restrictTo("supervisor"), getProjectReport);
-router.get("/supervisors", protect, getSupervisorReport);
+router.get("/supervisors", restrictTo("supervisor"), getSupervisorReport);
 
 module.exports = router;

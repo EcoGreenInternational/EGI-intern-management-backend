@@ -22,6 +22,8 @@ const socialContentSchema = new mongoose.Schema(
     plannedPostDate:      { type: Date, required: true },
     actualPostDate:       { type: Date },
     performanceCheckedAt: { type: Date },
+    // Set when the 7-day "add performance data" reminder has been sent, so it goes out once.
+    performanceReminderSentAt: { type: Date },
     postUrl:              { type: String },
     status: {
       type: String,

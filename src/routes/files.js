@@ -13,23 +13,34 @@ const safeDestroy = async (publicId) => {
   catch (_) { /* ignore */ }
 };
 
+const isSupervisor = (user) => user.role === "supervisor";
+
+// Projects have no member list, so every logged-in user may use a project's
+// folder as long as the project exists and has not been deleted.
+const findActiveProject = (projectId) =>
+  Project.findOne({ _id: projectId, isDeleted: { $ne: true } });
+
+// Interns see their own uploads plus files shared by supervisors;
+// supervisors see everything.
+const visibilityFilter = (user) =>
+  isSupervisor(user)
+    ? {}
+    : { $or: [{ uploadedBy: user._id }, { uploaderRole: "supervisor" }] };
+
+const canSeeFile = (user, file) =>
+  isSupervisor(user) ||
+  String(file.uploadedBy?._id || file.uploadedBy) === String(user._id) ||
+  file.uploaderRole === "supervisor";
+
 // ── GET /api/files/project/:projectId ────────────────────────────────────────
 router.get("/project/:projectId", protect, async (req, res) => {
   try {
     const { projectId } = req.params;
 
-    const project = await Project.findById(projectId);
+    const project = await findActiveProject(projectId);
     if (!project) return res.status(404).json({ message: "Project not found" });
 
-    if (
-      req.user.role !== "supervisor" &&
-      !project.members.includes(req.user._id) &&
-      String(project.createdBy) !== String(req.user._id)
-    ) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    const files = await File.find({ projectId })
+    const files = await File.find({ projectId, ...visibilityFilter(req.user) })
       .sort({ createdAt: -1 })
       .populate("uploadedBy", "name role avatar avatarColor")
       .populate("projectId", "name");
@@ -65,19 +76,10 @@ router.post("/upload/:projectId", protect, generalUpload.single("file"), async (
 
     const { projectId } = req.params;
 
-    const project = await Project.findById(projectId);
+    const project = await findActiveProject(projectId);
     if (!project) {
       await safeDestroy(req.file.filename);
       return res.status(404).json({ message: "Project not found" });
-    }
-
-    if (
-      req.user.role !== "supervisor" &&
-      !project.members.includes(req.user._id) &&
-      String(project.createdBy) !== String(req.user._id)
-    ) {
-      await safeDestroy(req.file.filename);
-      return res.status(403).json({ message: "Access denied" });
     }
 
     const ext = (req.file.originalname.split(".").pop() || "").toLowerCase();
@@ -175,6 +177,7 @@ router.get("/:id/download", protect, async (req, res) => {
   try {
     const file = await File.findById(req.params.id);
     if (!file) return res.status(404).json({ message: "File not found" });
+    if (!canSeeFile(req.user, file)) return res.status(403).json({ message: "Access denied" });
 
     // Redirect to Cloudinary URL directly (browser handles download)
     if (file.filePath && /^https?:\/\//i.test(file.filePath)) {

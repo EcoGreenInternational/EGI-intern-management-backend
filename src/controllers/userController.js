@@ -142,7 +142,7 @@ exports.deleteUser = async (req, res, next) => {
 // ── GET /api/users/:id/stats ──────────────────────────────────────────────────
 exports.getUserStats = async (req, res, next) => {
   try {
-    const allTasks   = await Task.find({ assignedTo: req.params.id });
+    const allTasks   = await Task.find({ assignedTo: req.params.id, isDeleted: { $ne: true } });
 
     const realTasks  = allTasks.filter(t => t.isLeave !== true);
     const leaveDays  = allTasks.filter(t => t.isLeave === true).length;

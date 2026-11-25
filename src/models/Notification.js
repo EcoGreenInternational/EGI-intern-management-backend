@@ -23,6 +23,8 @@ const notificationSchema = new mongoose.Schema(
         "performance",
         "content_assigned",       // sent to intern when new content is assigned
         "performance_submitted",  // sent to supervisors when intern submits metrics
+        "missed_post",            // sent by socialCron when a planned post passes its date
+        "performance_due",        // sent by socialCron 7 days after posting without metrics
       ],
       required: true,
     },
